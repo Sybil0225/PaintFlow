@@ -1,0 +1,27 @@
+unet_additional_kwargs:
+  use_inflated_groupnorm:     true
+  use_motion_module:          true
+  motion_module_resolutions:  [1,2,4,8]
+  motion_module_mid_block:    false
+  motion_module_type:         "PaintingEnhancedVanilla"
+
+
+  motion_module_kwargs:
+    num_attention_heads:        12
+    num_transformer_block:      2
+    attention_block_types:      [ "Temporal_Self", "Temporal_Self" ]
+    temporal_position_encoding: true
+    temporal_attention_dim_div: 1
+    zero_initialize:            true
+    enable_painting_enhancement: true  # 新增参数
+    painting_stage_dim: 128   # 新增参数
+    progressive_strength: 0.1 # 新增参数
+    enable_progressive_attention: true # 新增参数
+
+
+noise_scheduler_kwargs:
+  beta_start:    0.00085
+  beta_end:      0.012
+  beta_schedule: "scaled_linear"
+  steps_offset:  1
+  clip_sample:   false

@@ -1,0 +1,59 @@
+# 1-sketch-to-video
+- adapter_lora_scale: 0.2
+  adapter_lora_path: "/workspace/AnimateDiff/models/Motion_Module/v3_sd15_adapter.ckpt"
+  dreambooth_path:    "/workspace/AnimateDiff/models/DreamBooth_LoRA/toonyou_beta3.safetensors"
+
+  inference_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/inference-v5.yaml"
+  motion_module:    "/workspace/AnimateDiff/PaintFlow/outputs/enhance_stage_128_head_12/checkpoints/checkpoint-epoch-23.ckpt"
+
+  controlnet_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/sparsectrl/latent_condition.yaml"
+  controlnet_path:   "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_sketch/train_sparsectrl-2025-07-30T06-10-23/checkpoints/sparsectrl-sketch-epoch-7.ckpt"
+
+  seed: -1
+  steps: 50
+  guidance_scale: 9.5
+
+  controlnet_image_indexs: [1, 5]
+  controlnet_images:
+    - "/workspace/control_data/09.png"
+    - "/workspace/control_data/10.png"
+    - "/workspace/control_data/mountain.png"
+    - "/workspace/control_data/08.png"
+
+  prompt:
+    - "painting process, a short-haired girl, side face view, face angle remain unchanged"
+    - "painting process, from sketch to line art, then base color, finally light/shadow. a short-haired man in suit, face angle remain unchanged"
+    - "painting process, from Sketch to LineArt, then BaseColor, finally Light/Shadow. A landscape painting of mountain and river, view angle remain unchanged"
+    - "painting process, from sketch to line art, then base color, finally light/shadow. A boy with blond hair and a girl with short pink hair, both holding dolls, face angle remain unchanged"
+
+
+  n_prompt:
+    - "worst quality, low quality, letterboxed"
+
+
+## 2-storyboarding
+#- adapter_lora_scale: 1.0
+#  adapter_lora_path: "models/Motion_Module/v3_sd15_adapter.ckpt"
+#  dreambooth_path:    "models/DreamBooth_LoRA/realisticVisionV60B1_v51VAE.safetensors"
+#
+#  inference_config: "configs/inference/inference-v3.yaml"
+#  motion_module:    "models/Motion_Module/v3_sd15_mm.ckpt"
+#
+#  controlnet_config: "configs/inference/sparsectrl/image_condition.yaml"
+#  controlnet_path:   "models/SparseCtrl/v3_sd15_sparsectrl_scribble.ckpt"
+#
+#  seed: -1
+#  steps: 25
+#  guidance_scale: 8.5
+#
+#  controlnet_image_indexs: [0,8,15]
+#  controlnet_images:
+#    - "__assets__/demos/scribble/scribble_2_1.png"
+#    - "__assets__/demos/scribble/scribble_2_2.png"
+#    - "__assets__/demos/scribble/scribble_2_3.png"
+#
+#  prompt:
+#    - "an aerial view of a modern city, sunlight, day time, masterpiece, high quality"
+#    - "an aerial view of a cyberpunk city, night time, neon lights, masterpiece, high quality"
+#  n_prompt:
+#    - "worst quality, low quality, letterboxed"
