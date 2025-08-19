@@ -290,7 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("--inference-config", type=str,
                         default="/workspace/AnimateDiff/PaintFlow/configs/inference/inference-v7.yaml")
     parser.add_argument("--config", type=str,
-                        default="/workspace/AnimateDiff/PaintFlow/configs/prompts/1_animate/1_3_animate_ToonYou.yaml")
+                        default="/workspace/AnimateDiff/PaintFlow/configs/prompts/1_animate/animate.yaml")
 
     parser.add_argument("--motion_modules_dir", type=str,
                         default="/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints",

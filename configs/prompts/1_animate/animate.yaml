@@ -1,17 +1,17 @@
 # motion module v3
-- dreambooth_path: "/workspace/AnimateDiff/models/DreamBooth_LoRA/toonyouJP_alpha1.safetensors"
-  lora_model_path: "/workspace/AnimateDiff/models/DreamBooth_LoRA/Monet_ impressionism_oil painting.safetensors"
+- dreambooth_path: "/workspace/anyloraCheckpoint_bakedvaeBlessedFp16.safetensors"
+  lora_model_path: ""
 
-  inference_config: "configs/inference/inference-v3.yaml"
+  inference_config: "configs/inference/inference-v7.yaml"
 #  motion_module: "/workspace/AnimateDiff/PaintFlow/outputs/training-2025-03-24T04-35-34/checkpoints/checkpoint-epoch-2.ckpt"
 
 
   seed: [12192490710448890259, 12238800062118732365, 13226337751639812613, 16431231374396590344]
-  steps: 80
+  steps: 50
   guidance_scale: 8.5
 
   prompt:
-    - "Painting process: sketch → line art → base colors → shading, a woman in a black dress, with her back turned to the viewer and her long hair flowing behind her. The character's face angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading, a woman in a black dress, left side face, short brown hair. The character's face angle remain unchanged"
     - "Painting process: sketch → line art → base colors → shading, a young man with dark hair, dressed in a white collared shirt and black. The character's face angle remain unchanged"
     - "Painting process: sketch → line art → base colors → shading, a man with blonde hair, dressed in a green shirt and black vest, sitting in a red chair. The character's face angle remain unchanged"
     - "Painting process: sketch → line art → base colors → shading, a digital illustration of a baseball player boy, set against a white background. The character's face angle remain unchanged"
@@ -24,19 +24,19 @@
 - dreambooth_path: "/workspace/AnimateDiff/models/DreamBooth_LoRA/toonyou_beta3.safetensors"
   lora_model_path: ""
 
-  inference_config: "configs/inference/inference-v5.yaml"
+  inference_config: "configs/inference/inference-v7.yaml"
 #  motion_module: "/workspace/AnimateDiff/PaintFlow/outputs/training-2025-03-24T04-35-34/checkpoints/checkpoint-epoch-2.ckpt"
 
 
-  seed: [487371078234460867, 87371078234460867, 1487371078234460867, 3487371078234460867]
-  steps: 70
+  seed: [3487371078234460867, 3487371078234460867, 1487371078234460867, 3487371078234460867]
+  steps: 50
   guidance_scale: 8.0
 
   prompt:
-    - "Painting process: sketch → line art → base colors → light/shadow, illustration of a short black hair girl, side view. The view angle remain unchanged"
-    - "Painting process: sketch → line art → base colors → shading, an illustration of a man with blonde hair. The view angle remain unchanged"
-    - "Painting process: sketch → line art → base colors → shading, an illustration of mountain and river. The view angle remain unchanged"
-    - "Painting process: sketch → line art → base colors → shading, A breathtaking landscape painting of a mountain valley at sunrise. The view angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → light/shadow, a charming anime-style illustration of a young girl with striking pink hair and blue eyes. SAME character, CONSISTENT pose, NO changes in main subject"
+    - "Painting process: sketch → line art → base colors → shading, a cartoon character with long, flowing hair and a regal outfit, standing in front of a vibrant background. SAME character, CONSISTENT pose, NO changes in main subject"
+    - "Painting process: sketch → line art → base colors → shading, an illustration of mountain and river. NO changes in main subject"
+    - "Painting process: sketch → line art → base colors → shading, A breathtaking landscape painting of a mountain valley at sunrise. NO changes in main subject"
 
 
 
