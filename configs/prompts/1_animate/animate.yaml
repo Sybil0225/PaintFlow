@@ -11,7 +11,10 @@
   guidance_scale: 8.5
 
   prompt:
-    - "Painting process: sketch → line art → base colors → shading, a woman in a black dress, left side face, short brown hair. The character's face angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → light/shadow, a charming anime-style illustration of a young girl with striking pink hair and blue eyes, bust. SAME character, CONSISTENT pose, NO changes in main subject"
+    - "Painting process: sketch → line art → base colors → shading, a cartoon character with long, flowing hair and a regal outfit, standing in front of a vibrant background. SAME character, CONSISTENT pose, NO changes in main subject"
+    - "Painting process: sketch → line art → base colors → shading, an illustration of mountain and river. NO changes in main subject"
+    - "Painting process: sketch → line art → base colors → shading, A breathtaking landscape painting of a mountain valley at sunrise. NO changes in main subject"
     - "Painting process: sketch → line art → base colors → shading, a young man with dark hair, dressed in a white collared shirt and black. The character's face angle remain unchanged"
     - "Painting process: sketch → line art → base colors → shading, a man with blonde hair, dressed in a green shirt and black vest, sitting in a red chair. The character's face angle remain unchanged"
     - "Painting process: sketch → line art → base colors → shading, a digital illustration of a baseball player boy, set against a white background. The character's face angle remain unchanged"

@@ -19,7 +19,6 @@ from paintflow.models.sparse_controlnet import SparseControlNetModel
 from paintflow.pipelines.pipeline_animation import AnimationPipeline
 from paintflow.utils.util import save_videos_grid
 from paintflow.utils.util import load_weights, auto_download
-from paintflow.data.sketch_extractor import SketchExtractor
 from diffusers.utils.import_utils import is_xformers_available
 
 from einops import rearrange, repeat
@@ -29,7 +28,7 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 @torch.no_grad()
 def main(args):
@@ -41,7 +40,7 @@ def main(args):
     os.makedirs(base_savedir)
 
     config = OmegaConf.load(args.config)
-    sketch_extractor = SketchExtractor() if args.enable_sketch_sequence else None
+
     # motion modules directory from CLI argument
     motion_modules_dir = args.motion_modules_dir
     if not os.path.exists(motion_modules_dir):
@@ -70,7 +69,7 @@ def main(args):
     else:
         print("Using default VAE from pretrained model")
         vae = AutoencoderKL.from_pretrained(args.pretrained_model_path, subfolder="vae")
-    vae = vae.cuda(1)
+    vae = vae.cuda(0)
 
     sample_idx = 0
     for model_idx, model_config in enumerate(config):
@@ -118,7 +117,7 @@ def main(args):
                 subfolder="unet",
                 unet_additional_kwargs=OmegaConf.to_container(inference_config.unet_additional_kwargs)
             )
-        unet = unet.cuda(1)
+        unet = unet.cuda(0)
 
         # Load motion modules
         motion_module_paths = sorted(glob.glob(os.path.join(motion_modules_dir, "*.ckpt")))
@@ -139,7 +138,7 @@ def main(args):
                 unet=unet,
                 scheduler=DDIMScheduler
     (**OmegaConf.to_container(inference_config.noise_scheduler_kwargs)),
-            ).to("cuda:1")
+            ).to("cuda:0")
 
             pipeline = load_weights(
                 pipeline,
@@ -182,106 +181,13 @@ def main(args):
                 ).videos
 
                 prompt_text = "-".join((prompt.replace("/", "").split(" ")[:10]))
-                original_video_path = f"{savedir}/{sample_idx}-{prompt_text}.gif"
+                save_videos_grid(sample, f"{savedir}/{sample_idx}-{prompt_text}.gif")
+                print(f"Saved to {savedir}/{sample_idx}-{prompt_text}.gif")
 
-                # 如果启用线稿序列功能
-                if args.enable_sketch_sequence:
-                    try:
-                        # 从sample中提取帧（sample是torch tensor格式）
-                        # sample 的形状应该是 [1, C, T, H, W] 或 [1, T, C, H, W]
-                        sample_np = sample[0].cpu().numpy()
-
-                        print(f"调试: sample shape: {sample_np.shape}")
-
-                        # 确保数据类型正确
-                        if sample_np.dtype != np.float32:
-                            sample_np = sample_np.astype(np.float32)
-
-                        # 将数值范围从 [-1, 1] 转换到 [0, 255]
-                        sample_np = (sample_np + 1.0) * 127.5
-                        sample_np = np.clip(sample_np, 0, 255).astype(np.uint8)
-
-                        if len(sample_np.shape) == 4:
-                            if sample_np.shape[0] == 3 and sample_np.shape[1] > 3:  # [C=3, T, H, W]
-                                sample_np = sample_np.transpose(1, 2, 3, 0)  # [T, H, W, C]
-                                print(f"调试: 转换后 shape (C,T,H,W->T,H,W,C): {sample_np.shape}")
-                            elif sample_np.shape[1] == 3:  # [T, C=3, H, W]
-                                sample_np = sample_np.transpose(0, 2, 3, 1)  # [T, H, W, C]
-                                print(f"调试: 转换后 shape (T,C,H,W->T,H,W,C): {sample_np.shape}")
-                            else:
-                                print(f"警告: 无法识别的维度格式: {sample_np.shape}")
-                                # 尝试猜测最可能的格式
-                                if sample_np.shape[-1] == 3:  # 最后一维是通道
-                                    pass  # 已经是正确格式
-                                elif sample_np.shape[0] == model_config.L:  # 第一维是时间
-                                    # 可能是 [T, H, W, C] 但 C 不是 3
-                                    if sample_np.shape[-1] != 3:
-                                        print(f"错误: 最后一维不是3个通道: {sample_np.shape}")
-                                        continue
-                                else:
-                                    print(f"错误: 无法处理的维度: {sample_np.shape}")
-                                    continue
-
-                        frames = []
-                        for t in range(sample_np.shape[0]):
-                            frame = sample_np[t]  # [H, W, C]
-                            print(f"调试: 帧 {t} shape: {frame.shape}")
-
-                            # 确保是RGB格式
-                            if len(frame.shape) == 3 and frame.shape[-1] == 3:
-                                frames.append(frame)
-                            elif len(frame.shape) == 2:  # 灰度图
-                                # 转换为RGB
-                                frame_rgb = np.stack([frame, frame, frame], axis=-1)
-                                frames.append(frame_rgb)
-                                print(f"调试: 将灰度图转换为RGB")
-                            else:
-                                print(f"警告: 跳过帧 {t}，形状不正确: {frame.shape}")
-                                continue
-
-                        if not frames:
-                            raise ValueError("没有有效的帧可以处理")
-
-                        print(f"调试: 成功处理了 {len(frames)} 帧")
-
-                        # 获取第一帧（用于线稿生成）
-                        first_frame = frames[0]
-                        first_frame_pil = Image.fromarray(first_frame)
-
-                        # 使用LoRA风格生成线稿，然后创建4帧渐进序列
-                        print("正在使用LoRA风格生成线稿序列...")
-                        sketch_frames = sketch_extractor.generate_lora_sketch_sequence(
-                            first_frame_pil,
-                            prompt=prompt,
-                            num_frames=2,  # 2帧
-                            pipeline=pipeline,
-                            vae=vae,
-                            text_encoder=text_encoder,
-                            tokenizer=tokenizer,
-                            width=model_config.W,
-                            height=model_config.H
-                        )
-
-                        # 合并生成18帧视频 (2帧线稿 + 16帧原始)
-                        enhanced_video_path = f"{savedir}/{sample_idx:03d}-{prompt_idx:02d}-{prompt_text}_18frames.gif"
-                        sketch_extractor.combine_frames_to_video_only(
-                            sketch_frames,
-                            frames,
-                            enhanced_video_path,
-                            fps=args.output_fps
-                        )
-
-                        print(f"Saved enhanced 18-frame video to {enhanced_video_path}")
-
-                    except Exception as e:
-                        print(f"线稿序列生成失败: {e}")
-                        print("继续使用原始视频...")
-                        import traceback
-                        traceback.print_exc()
-
-            sample_idx += 1
+                sample_idx += 1
 
             OmegaConf.save(config, f"{savedir}/config.yaml")
+
 
 
 if __name__ == "__main__":
@@ -307,15 +213,6 @@ if __name__ == "__main__":
     parser.add_argument("--H", type=int, default=256)
 
     parser.add_argument("--without-xformers", action="store_true")
-    parser.add_argument("--enable-sketch-sequence", action="store_true", default=True,
-                        help="Enable sketch sequence generation")
-    parser.add_argument("--sketch-method", type=str, default="canny",
-                        choices=["canny", "sobel", "laplacian", "threshold"],
-                        help="Method for line art extraction")
-    parser.add_argument("--sketch-frames", type=int, default=2,
-                        help="Number of sketch frames to generate")
-    parser.add_argument("--output-fps", type=float, default=8.0,
-                        help="Output video frame rate")
 
     args = parser.parse_args()
     main(args)
