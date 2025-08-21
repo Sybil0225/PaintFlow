@@ -4,7 +4,7 @@ image_finetune: false
 output_dir: "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_sketch"
 pretrained_model_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion"
 controlnet_checkpoint_path: "models/SparseCtrl/v3_sd15_sparsectrl_scribble.ckpt"
-motion_module_path: "/workspace/AnimateDiff/PaintFlow/outputs/enhance_stage_128_head_12/checkpoints/checkpoint-epoch-23.ckpt"
+motion_module_path: "/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints/1-checkpoint.ckpt"
 
 
 # SparseCtrl 特定配置
@@ -21,8 +21,8 @@ unet_additional_kwargs:
   unet_use_temporal_attention: false
   motion_module_type: PaintingEnhancedVanilla
   motion_module_kwargs:
-    num_attention_heads: 12
-    num_transformer_block: 2
+    num_attention_heads: 6
+    num_transformer_block: 1
     attention_block_types: [ "Temporal_Self", "Temporal_Self" ]
     temporal_position_encoding: true
     temporal_position_encoding_max_len: 48
@@ -30,7 +30,7 @@ unet_additional_kwargs:
     zero_initialize: true
     enable_painting_enhancement: true  # 新增参数
     painting_stage_dim: 128   # 新增参数
-    progressive_strength: 0.4 # 新增参数
+    progressive_strength: 0.5 # 新增参数
     enable_progressive_attention: true # 新增参数
 
 
@@ -43,8 +43,8 @@ controlnet_additional_kwargs:
   motion_module_mid_block: false
   motion_module_type: "PaintingEnhancedVanilla"
   motion_module_kwargs:
-    num_attention_heads: 12
-    num_transformer_block: 2
+    num_attention_heads: 6
+    num_transformer_block: 1
     attention_block_types: [ "Temporal_Self", "Temporal_Self" ]
     temporal_position_encoding: true
     temporal_position_encoding_max_len: 48
@@ -52,7 +52,7 @@ controlnet_additional_kwargs:
     zero_initialize: true
     enable_painting_enhancement: true  # 新增参数
     painting_stage_dim: 128   # 新增参数
-    progressive_strength: 0.4 # 新增参数
+    progressive_strength: 0.5 # 新增参数
     enable_progressive_attention: true # 新增参数
 
 noise_scheduler_kwargs:
@@ -72,14 +72,14 @@ train_data:
 validation_data:
   prompts:
    - "Painting process: sketch → line art → base colors → shading"
-  num_inference_steps: 25
+  num_inference_steps: 50
   guidance_scale: 8.
 
 learning_rate: 1.e-5
 train_batch_size: 1
-max_train_steps: 20000
+max_train_steps: 30000
 checkpointing_steps: 500
-validation_steps: 1000
+validation_steps: 500
 
 global_seed: 42
 mixed_precision_training: true

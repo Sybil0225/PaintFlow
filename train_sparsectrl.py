@@ -36,7 +36,7 @@ import transformers
 from transformers import CLIPTextModel, CLIPTokenizer
 from transformers.trainer_utils import is_main_process
 
-from paintflow.data.dataset import WebVid10M, PaintCtrlDataset
+from paintflow.data.dataset import  PaintCtrlDataset
 from paintflow.models.unet import UNet3DConditionModel
 from paintflow.pipelines.pipeline_animation import AnimationPipeline
 from paintflow.utils.util import save_videos_grid, zero_rank_print
@@ -380,7 +380,7 @@ def main(
         batch_size=train_batch_size,
         shuffle=False,
         sampler=distributed_sampler,
-        num_workers=0,
+        num_workers=4,
         pin_memory=False,
         drop_last=True,
     )

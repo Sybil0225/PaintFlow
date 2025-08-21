@@ -159,7 +159,7 @@ def main(
     lr_scheduler: str = "constant",
 
     trainable_modules: Tuple[str] = (None, ),
-    num_workers: int = 8,
+    num_workers: int = 16,
     train_batch_size: int = 1,
     adam_beta1: float = 0.9,
     adam_beta2: float = 0.999,
@@ -621,7 +621,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",   type=str, default="/workspace/AnimateDiff/PaintFlow/configs/training/v2/training.yaml")
+    parser.add_argument("--config",   type=str, default="/workspace/AnimateDiff/PaintFlow/configs/training/v1/training.yaml")
     parser.add_argument("--launcher", type=str, choices=["pytorch", "slurm"], default="pytorch")
     parser.add_argument("--wandb",    action="store_true")
     args = parser.parse_args()

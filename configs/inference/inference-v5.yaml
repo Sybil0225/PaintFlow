@@ -15,7 +15,7 @@ unet_additional_kwargs:
     zero_initialize:            true
     enable_painting_enhancement: true  # 新增参数
     painting_stage_dim: 128   # 新增参数
-    progressive_strength: 0.4 # 新增参数
+    progressive_strength: 0.6 # 新增参数
     enable_progressive_attention: true # 新增参数
 
 

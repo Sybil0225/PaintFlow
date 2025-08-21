@@ -4,7 +4,7 @@ output_dir: "outputs"
 pretrained_model_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion"
 unet_checkpoint_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion/unet/diffusion_pytorch_model.safetensors"
 vae_checkpoint_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion/vae/diffusion_pytorch_model.safetensors"
-vanilla_motion_checkpoint_path: "/workspace/AnimateDiff/PaintFlow/outputs/enhance_stage_128_head_12/checkpoints/checkpoint-epoch-23.ckpt"
+vanilla_motion_checkpoint_path: "/workspace/AnimateDiff/PaintFlow/outputs/enhance_stage_64_strength_2/checkpoints/checkpoint.ckpt"
 unet_additional_kwargs:
   use_motion_module              : true
   motion_module_resolutions      : [ 1,2,4,8 ]
@@ -13,8 +13,8 @@ unet_additional_kwargs:
 
   motion_module_type: PaintingEnhancedVanilla
   motion_module_kwargs:
-    num_attention_heads                : 12
-    num_transformer_block              : 2
+    num_attention_heads                : 6
+    num_transformer_block              : 1
     attention_block_types              : [ "Temporal_Self", "Temporal_Self" ]
     temporal_position_encoding         : true
     temporal_position_encoding_max_len : 48
@@ -22,7 +22,7 @@ unet_additional_kwargs:
     zero_initialize                    : true
     enable_painting_enhancement: true
     painting_stage_dim: 128
-    progressive_strength: 0.1
+    progressive_strength: 0.5
     enable_progressive_attention: true
 
 
@@ -41,6 +41,12 @@ train_data:
   sample_size:     256
   sample_stride:   1
   sample_n_frames: 16
+  enhance_early_stages: true
+  early_stage_frames: 4
+  line_extraction_method: "connected_canny"  # 最平衡
+  line_connection: true
+  noise_reduction: true
+
 
 validation_data:
   prompts:
@@ -57,11 +63,11 @@ trainable_modules:
   - "motion_modules."
 
 
-learning_rate:    3.e-6
-train_batch_size: 2
+learning_rate:    2.e-6
+train_batch_size: 3
 
 max_train_epoch:      -1
-max_train_steps:      20000
+max_train_steps:      40000
 checkpointing_epochs: -1
 checkpointing_steps:  200
 

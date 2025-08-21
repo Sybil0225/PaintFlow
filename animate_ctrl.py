@@ -290,8 +290,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--pretrained-model-path", type=str, default="/workspace/AD-Evo-Tuner/models/StableDiffusion")
-    parser.add_argument("--inference-config", type=str, default="configs/inference/inference-v5.yaml")
-    parser.add_argument("--config", type=str, default="/workspace/AnimateDiff/PaintFlow/configs/prompts/3_sparsectrl/3_3_sparsectrl_sketch.yaml")
+    parser.add_argument("--inference-config", type=str, default="configs/inference/inference-v7.yaml")
+    parser.add_argument("--config", type=str, default="/workspace/AnimateDiff/PaintFlow/configs/prompts/3_sparsectrl/sparsectrl_rgb.yaml")
 
     parser.add_argument("--L", type=int, default=16)
     parser.add_argument("--W", type=int, default=256)

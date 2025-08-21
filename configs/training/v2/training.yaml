@@ -2,7 +2,7 @@ image_finetune: false
 
 output_dir: "outputs"
 pretrained_model_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion"
-unet_checkpoint_path: "/workspace/AnimateDiff/SD_1_5/sd-model-finetuned1/checkpoint-6000/unet/diffusion_pytorch_model.safetensors"
+unet_checkpoint_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion/unet/diffusion_pytorch_model.safetensors"
 vae_checkpoint_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion/vae/diffusion_pytorch_model.safetensors"
 vanilla_motion_checkpoint_path: "/workspace/AnimateDiff/models/Motion_Module/mm_sd_v15.ckpt"
 unet_additional_kwargs:
@@ -22,7 +22,7 @@ unet_additional_kwargs:
     zero_initialize                    : true
     enable_painting_enhancement: true
     painting_stage_dim: 128
-    progressive_strength: 0.1
+    progressive_strength: 0.6
     enable_progressive_attention: true
 
 
@@ -50,7 +50,7 @@ validation_data:
    - "Painting process: sketch → line art → base colors → shading. a digital illustration of an anime-style baseball players"
    - "Painting process: sketch → line art → base colors → shading. two men sharing a moment of intimacy, with one of them holding a lit cigarette to the other's mouth."
 
-  num_inference_steps: 70
+  num_inference_steps: 50
   guidance_scale: 8.0
 
 trainable_modules:
@@ -65,7 +65,7 @@ max_train_steps:      40000
 checkpointing_epochs: -1
 checkpointing_steps:  500
 
-validation_steps:       5000
+validation_steps:       500
 validation_steps_tuple: [50, 100]
 
 global_seed: 42

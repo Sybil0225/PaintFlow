@@ -1,13 +1,13 @@
 # 1-sketch-to-video
 - adapter_lora_scale: 0.2
-  adapter_lora_path: "/workspace/AnimateDiff/models/Motion_Module/v3_sd15_adapter.ckpt"
-  dreambooth_path:    "/workspace/AnimateDiff/models/DreamBooth_LoRA/toonyou_beta3.safetensors"
+  adapter_lora_path: ""
+  dreambooth_path:    "/workspace/anyloraCheckpoint_bakedvaeBlessedFp16.safetensors"
 
-  inference_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/inference-v5.yaml"
-  motion_module:    "/workspace/AnimateDiff/PaintFlow/outputs/enhance_stage_128_head_12/checkpoints/checkpoint-epoch-23.ckpt"
+  inference_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/inference-v7.yaml"
+  motion_module:    "/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints/checkpoint-epoch-52.ckpt"
 
   controlnet_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/sparsectrl/latent_condition.yaml"
-  controlnet_path:   "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_sketch/train_sparsectrl-2025-07-30T06-10-23/checkpoints/sparsectrl-sketch-epoch-7.ckpt"
+  controlnet_path:   "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_sketch/train_sketch_ctrl-2025-08-20T06-37-12/checkpoints/sparsectrl-sketch-checkpoint.ckpt"
 
   seed: -1
   steps: 50
@@ -21,10 +21,10 @@
     - "/workspace/control_data/08.png"
 
   prompt:
-    - "painting process, a short-haired girl, side face view, face angle remain unchanged"
-    - "painting process, from sketch to line art, then base color, finally light/shadow. a short-haired man in suit, face angle remain unchanged"
-    - "painting process, from Sketch to LineArt, then BaseColor, finally Light/Shadow. A landscape painting of mountain and river, view angle remain unchanged"
-    - "painting process, from sketch to line art, then base color, finally light/shadow. A boy with blond hair and a girl with short pink hair, both holding dolls, face angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading, a short-haired girl, side face view, face angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading. one man in suit, short hair, face angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading. A landscape painting of mountain and river, view angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading A boy with blond hair and a girl with short pink hair, both holding dolls, face angle remain unchanged"
 
 
   n_prompt:

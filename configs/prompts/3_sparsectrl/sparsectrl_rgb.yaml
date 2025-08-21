@@ -1,0 +1,29 @@
+# animation-1
+- adapter_lora_scale: 1.0
+  adapter_lora_path: ""
+  dreambooth_path:   "/workspace/anyloraCheckpoint_bakedvaeBlessedFp16.safetensors"
+
+  inference_config: "configs/inference/inference-v7.yaml"
+  motion_module:    "/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints/1-checkpoint.ckpt"
+
+  controlnet_config: "configs/inference/sparsectrl/latent_condition.yaml"
+  controlnet_path:   "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_rgb/train_rgb_ctrl-2025-08-20T06-36-00/checkpoints/sparsectrl-rgb-checkpoint.ckpt"
+
+  seed: -1
+  steps: 50
+  guidance_scale: 8.5
+
+  controlnet_image_indexs: [0]
+  controlnet_images:
+    - "/workspace/control_data/rgb/red_hair.png"
+    - "/workspace/control_data/rgb/videos_0696_mid.jpg"
+    - "/workspace/control_data/rgb/videos_0440_mid.jpg"
+
+  prompt:
+    - "Painting process: sketch → line art → base colors → shading, a red haired boy wearing suit and gree tie, sitting on a chair. view angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading, a pink haired girl wearing white dress in flowers, background is blue sky. view angle remain unchanged"
+    - "Painting process: sketch → line art → base colors → shading, a girl with happy face, holds a toy. view angle remain unchanged"
+  n_prompt:
+    - "worst quality, low quality, letterboxed"
+
+

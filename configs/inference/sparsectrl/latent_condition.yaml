@@ -9,14 +9,14 @@ controlnet_additional_kwargs:
   motion_module_type:        "PaintingEnhancedVanilla"
 
   motion_module_kwargs:
-    num_attention_heads:        12
-    num_transformer_block:      2
+    num_attention_heads:        6
+    num_transformer_block:      1
     attention_block_types:      [ "Temporal_Self", "Temporal_Self" ]
     temporal_position_encoding: true
     temporal_attention_dim_div: 1
     zero_initialize:            true
     enable_painting_enhancement: true  # 新增参数
     painting_stage_dim: 128   # 新增参数
-    progressive_strength: 0.4 # 新增参数
+    progressive_strength: 0.5 # 新增参数
     enable_progressive_attention: true # 新增参数
 

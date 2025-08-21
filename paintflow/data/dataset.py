@@ -1,207 +1,6 @@
-import os, io, csv, math, random
-from decord import VideoReader
-from pathlib import Path
 import json
-import os
-import cv2
 import numpy as np
-from torch.utils.data import Dataset
-from PIL import Image
-import torch
-from torchvision import transforms
-import pandas as pd
-
-class WebVid10M(Dataset):
-    def __init__(
-            self,
-            csv_path, video_folder,
-            sample_size=256, sample_stride=4, sample_n_frames=16,
-            is_image=False,
-            video_json_path=None,  # Add parameter for video_16.json
-        ):
-        self.video_json_path = video_json_path  # Store the video_16.json path
-        self.video_json_data = None  # Initialize as None to maintain compatibility
-
-        if video_json_path:  # If a JSON/JSONL path is provided, parse the file
-            self.video_json_data = self._load_json_file(video_json_path)  # Parse JSON/JSONL file
-        with open(csv_path, 'r') as csvfile:
-            self.dataset = list(csv.DictReader(csvfile))
-        self.length = len(self.dataset)
-        # zero_rank_print(f"data scale: {self.length}")
-
-        self.video_folder    = video_folder
-        self.sample_stride   = sample_stride
-        self.sample_n_frames = sample_n_frames
-        self.is_image        = is_image
-        
-        sample_size = (sample_size, sample_size) if isinstance(sample_size, int) else sample_size
-
-        # Pixel transforms (for image-based data)
-        self.pixel_transforms = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.Resize(sample_size[0]),
-            transforms.CenterCrop(sample_size),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True),
-        ])
-
-    def _load_json_file(self, file_path):
-        """
-        Helper function to load JSON/JSONL data.
-
-        Args:
-            file_path (str): Path to the file.
-
-        Returns:
-            dict: Parsed JSON data.
-        """
-        file_path = Path(file_path)
-        if file_path.suffix == '.json':  # If the file is a regular JSON file
-            with open(file_path, 'r') as jsonfile:
-                return json.load(jsonfile)
-        elif file_path.suffix == '.jsonl':  # If the file is a JSON-lines file
-            json_data = {}
-            with open(file_path, 'r') as jsonfile:
-                for line in jsonfile:
-                    obj = json.loads(line)
-                    video_id = obj.get("videoid")  # Assuming "videoid" is the key linking to dataset
-                    if video_id:
-                        json_data[video_id] = obj
-            return json_data
-        else:
-            raise ValueError(f"Unsupported file format: {file_path}")
-
-    
-    def get_batch(self, idx):
-        video_dict = self.dataset[idx]
-        videoid, prompt = video_dict['videoid'], video_dict['prompt']
-
-        # Check if sampled indices are available in video_16.json
-        json_sampled_indices = None
-        if self.video_json_data and videoid in self.video_json_data:
-            json_sampled_indices = self.video_json_data[videoid]
-        videoid, prompt = video_dict['videoid'], video_dict['prompt']
-        # Construct the path to the video
-        video_path    = os.path.join(self.video_folder, f"{videoid}.mp4")
-        video_reader = VideoReader(video_path)
-        video_length = len(video_reader)
-        
-        if not self.is_image:
-            if json_sampled_indices:  # Use indices from video_16.json if available
-                batch_index = np.array(json_sampled_indices[:self.sample_n_frames], dtype=int)
-            else:
-                clip_length = min(video_length, (self.sample_n_frames - 1) * self.sample_stride + 1)
-                start_idx   = random.randint(0, video_length - clip_length)
-                batch_index = np.linspace(start_idx, start_idx + clip_length - 1, self.sample_n_frames, dtype=int)
-        else:
-            if json_sampled_indices:  # Use the first index for images
-                batch_index = [json_sampled_indices[0]]
-            else:
-                batch_index = [random.randint(0, video_length - 1)]
-
-        # Read video frames and convert them to tensor
-        pixel_values = torch.from_numpy(video_reader.get_batch(batch_index).asnumpy()).permute(0, 3, 1, 2).contiguous()
-        pixel_values = pixel_values / 255.
-        del video_reader
-
-        if self.is_image:
-            pixel_values = pixel_values[0]
-        
-        return pixel_values, prompt
-
-    def __len__(self):
-        """
-                Updated to include each 16-frame group in JSONL for each video.
-                """
-        # Videos * sets of frame samples (2 in this case)
-        return self.length * 2 if self.video_json_data else self.length
-
-    def __getitem__(self, idx):
-        video_idx = idx // 2  # Determine the video index
-        group_idx = idx % 2  # Determine which group of frames to sample
-
-        # Retrieve the specific video
-        video_dict = self.dataset[video_idx]
-        videoid, prompt = video_dict['videoid'], video_dict['prompt']
-
-        # Get the corresponding sampled indices for the group
-        json_sampled_indices = None
-        if self.video_json_data and videoid in self.video_json_data:
-            json_sampled_indices = self.video_json_data[videoid][group_idx]
-
-        # Construct the video path and load frames
-        video_path = os.path.join(self.video_folder, f"{videoid}.mp4")
-        video_reader = VideoReader(video_path)
-        video_length = len(video_reader)
-
-        if not self.is_image:
-            if json_sampled_indices:  # Use predefined indices
-                batch_index = np.array(json_sampled_indices[:self.sample_n_frames], dtype=int)
-            else:
-                clip_length = min(video_length, (self.sample_n_frames - 1) * self.sample_stride + 1)
-                start_idx = random.randint(0, video_length - clip_length)
-                batch_index = np.linspace(start_idx, start_idx + clip_length - 1, self.sample_n_frames, dtype=int)
-        else:
-            # Fallback for images
-            if json_sampled_indices:
-                batch_index = [json_sampled_indices[0]]
-            else:
-                batch_index = [random.randint(0, video_length - 1)]
-
-        # Read and process frames
-        pixel_values = torch.from_numpy(video_reader.get_batch(batch_index).asnumpy()).permute(0, 3, 1, 2).contiguous()
-        pixel_values = pixel_values / 255.
-        del video_reader
-
-        if self.is_image:
-            pixel_values = pixel_values[0]
-
-        pixel_values = self.pixel_transforms(pixel_values)
-
-        # Return the sample
-        sample = dict(pixel_values=pixel_values, text=prompt)
-        return sample
-
-
-    def save_first_10_samples(self):
-        """保存前10条数据的16帧视频"""
-        import os
-        from PIL import Image
-
-        save_dir = "/workspace/dataset_samples"
-        os.makedirs(save_dir, exist_ok=True)
-
-        for i in range(min(10, len(self))):
-            print(f"保存第 {i} 个样本...")
-
-            # 获取数据
-            sample = self[i]
-            pixel_values = sample['pixel_values']  # [F, C, H, W]
-            text = sample['text']
-
-            # 创建样本文件夹
-            sample_dir = os.path.join(save_dir, f"sample_{i:02d}")
-            os.makedirs(sample_dir, exist_ok=True)
-
-            # 保存每一帧
-            for frame_idx in range(pixel_values.shape[0]):
-                frame = pixel_values[frame_idx]  # [C, H, W]
-
-                # 转换为PIL图像 (假设数据是[-1,1]范围)
-                frame = (frame + 1.0) / 2.0  # 转到[0,1]
-                frame = (frame * 255).clamp(0, 255).byte()
-                frame = frame.permute(1, 2, 0).cpu().numpy()  # [H, W, C]
-
-                # 保存
-                img = Image.fromarray(frame)
-                img.save(os.path.join(sample_dir, f"frame_{frame_idx:02d}.png"))
-
-            # 保存文本
-            with open(os.path.join(sample_dir, "prompt.txt"), 'w', encoding='utf-8') as f:
-                f.write(text)
-
-            print(f"已保存到: {sample_dir}")
-
-        print(f"所有样本保存完成，路径: {save_dir}")
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import os
 import pandas as pd
 import torch
@@ -221,6 +20,10 @@ class PaintVideo(Dataset):
         sample_n_frames: int = 16,
         is_image: bool = False,
         transform=None,
+        enhance_early_stages=True,
+        early_stage_frames=4,
+        **kwargs
+
     ):
         self.csv_path = csv_path
         self.video_folder = video_folder
@@ -229,6 +32,8 @@ class PaintVideo(Dataset):
         self.sample_n_frames = sample_n_frames
         self.is_image = is_image
         self.transform = transform
+        self.enhance_early_stages = enhance_early_stages
+        self.early_stage_frames = early_stage_frames
 
         # 加载 CSV 文件，并强制将 videoid 列读取为字符串
         assert os.path.exists(csv_path), f"找不到 CSV 文件：{csv_path}"
@@ -247,6 +52,143 @@ class PaintVideo(Dataset):
     def __len__(self):
         return len(self.data)
 
+    def _enhance_line_art_frame(self, pil_image):
+        """
+        对草稿和线稿阶段的帧进行增强，加强线条同时减少细节
+
+        Args:
+            pil_image: PIL Image对象
+
+        Returns:
+            Enhanced PIL Image
+        """
+        import cv2
+        import numpy as np
+        from PIL import Image, ImageEnhance, ImageFilter
+
+        # 转换为numpy数组
+        img_np = np.array(pil_image)
+
+        # 1. 先进行高斯模糊以减少细节噪声
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        blurred = cv2.GaussianBlur(img_cv, (3, 3), 1.0)  # 轻微模糊减少细节
+
+        # 2. 转换为灰度图进行边缘处理
+        gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+
+        # 3. 使用自适应阈值提取主要线条结构
+        # 增大block_size和C值以获得更粗的线条，减少细节
+        adaptive_thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,
+            15, 3  # 增大参数以减少细节
+        )
+
+        # 4. 使用形态学操作进一步简化线条
+        kernel = np.ones((3, 3), np.uint8)  # 增大kernel以简化细节
+        # 先腐蚀再膨胀，去除细小噪点
+        morph_img = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_OPEN, kernel)
+        # 再膨胀使线条更粗
+        morph_img = cv2.dilate(morph_img, kernel, iterations=1)
+
+        # 5. 边缘检测 - 使用更高的阈值减少细节边缘
+        edges = cv2.Canny(gray, 80, 200, apertureSize=3)  # 提高阈值
+
+        # 6. 线条细化和加强
+        # 使用距离变换和骨架化来获得更清晰的主线条
+        dist_transform = cv2.distanceTransform(morph_img, cv2.DIST_L2, 5)
+        _, sure_fg = cv2.threshold(dist_transform, 0.3 * dist_transform.max(), 255, 0)
+        sure_fg = np.uint8(sure_fg)
+
+        # 7. 创建最终的线条图
+        # 结合形态学处理和边缘信息
+        combined_lines = cv2.bitwise_or(morph_img, sure_fg)
+
+        # 8. 转换回RGB并增强对比度
+        if len(combined_lines.shape) == 2:
+            combined_lines_rgb = cv2.cvtColor(combined_lines, cv2.COLOR_GRAY2RGB)
+        else:
+            combined_lines_rgb = cv2.cvtColor(combined_lines, cv2.COLOR_BGR2RGB)
+
+        enhanced_pil = Image.fromarray(combined_lines_rgb)
+
+        # 9. 最终的对比度和锐度增强
+        # 增强对比度使线条更突出
+        contrast_enhancer = ImageEnhance.Contrast(enhanced_pil)
+        enhanced_pil = contrast_enhancer.enhance(1.5)
+
+        # 轻微锐化主要结构
+        final_enhanced = enhanced_pil.filter(ImageFilter.UnsharpMask(
+            radius=2, percent=120, threshold=5  # 调整参数专注于主要结构
+        ))
+
+        return final_enhanced
+
+    def _extract_frames_from_video(self, video_path, sampled_indices):
+        """
+        从视频中提取帧，并对前几帧进行线条增强
+        """
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video: {video_path}")
+
+        frames = []
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        sorted_indices = sorted(sampled_indices)
+
+        for frame_idx in sorted_indices:
+            if frame_idx >= total_frames:
+                print(f"Warning: Frame index {frame_idx} exceeds video length {total_frames} for {video_path}")
+                frame_idx = total_frames - 1
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+
+            if ret:
+                # Convert BGR to RGB
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(frame_rgb)
+                frames.append(pil_image)
+            else:
+                print(f"Warning: Could not read frame {frame_idx} from {video_path}")
+                black_frame = np.zeros((self.sample_size, self.sample_size, 3), dtype=np.uint8)
+                frames.append(Image.fromarray(black_frame))
+
+        cap.release()
+
+        # Reorder frames to match original sampled_indices order
+        if sorted_indices != sampled_indices:
+            index_mapping = {idx: i for i, idx in enumerate(sorted_indices)}
+            reordered_frames = [frames[index_mapping[idx]] for idx in sampled_indices]
+            frames = reordered_frames
+
+        # 确保帧数正确
+        if len(frames) != self.sample_n_frames:
+            while len(frames) < self.sample_n_frames:
+                frames.append(frames[-1] if frames else Image.new('RGB', (self.sample_size, self.sample_size)))
+            frames = frames[:self.sample_n_frames]
+
+        # 对前几帧进行线条增强
+        if self.enhance_early_stages:
+            enhanced_frames = []
+            for i, frame in enumerate(frames):
+                if i < self.early_stage_frames:
+                    # 增强前几帧的线条
+                    enhanced_frame = self._enhance_line_art_frame(frame)
+                    enhanced_frames.append(enhanced_frame)
+
+                    # 可选：保存增强前后对比图用于调试
+                    if hasattr(self, '_debug_save') and self._debug_save and i < 2:
+                        debug_dir = "/workspace/debug_enhanced_frames"
+                        os.makedirs(debug_dir, exist_ok=True)
+                        frame.save(f"{debug_dir}/original_frame_{i}.png")
+                        enhanced_frame.save(f"{debug_dir}/enhanced_frame_{i}.png")
+                else:
+                    # 后续帧保持原样
+                    enhanced_frames.append(frame)
+            frames = enhanced_frames
+
+        return frames
+
     def __getitem__(self, idx):
         """
         获取指定索引的视频及相应的文本提示
@@ -255,15 +197,16 @@ class PaintVideo(Dataset):
         video_path = sample["video_path"]
         prompt_text = sample["prompt"]
 
-        if self.is_image:  # 单帧模式（如果被指定）
-            frame = self._load_random_frame(video_path)
+        if self.is_image:  # single frmae
+            frames = self._extract_frames_from_video(video_path, [0])  # 提取第一帧
+            frame = frames[0]
             return {
                 "pixel_values": self._process_frame(frame),
                 "text": prompt_text,
             }
 
-        # 视频模式（加载多帧）
-        frames = self._load_frames(video_path)
+        # video mode
+        frames = self._extract_frames_from_video(video_path)  # 不传入sampled_indices，让函数内部生成
         return {
             "pixel_values": torch.stack([self._process_frame(frame) for frame in frames]),
             "text": prompt_text,
@@ -350,6 +293,7 @@ class PaintVideo(Dataset):
 
         return transform(square_image)
 
+
 class PaintCtrlDataset(Dataset):
     def __init__(self, video_dir, annotations_path, sketch2video_path=None, condition_type="rgb", transform=None,
                  resolution=(512, 512)):
@@ -390,44 +334,125 @@ class PaintCtrlDataset(Dataset):
     def __getitem__(self, idx):
         video_idx, group_idx = self.video_sample_mapping[idx]
         video_data = self.sketch2video_data[video_idx]
-
         video_path = video_data["video_path"]
-        sketch_index = video_data["sketch_index"]
+
+        # 计算需要的帧索引（控制帧 + 目标帧 16 个）
         start_idx = group_idx * 16
         end_idx = min(start_idx + 16, len(video_data["target_indices"]))
         target_indices = video_data["target_indices"][start_idx:end_idx]
         while len(target_indices) < 16:
             target_indices.append(target_indices[-1])
 
-
-        # Load and process control (sketch/rgb) frame
-        sketch_frame = self._load_video_frame(video_path, sketch_index)
-        if self.condition_type == "rgb":
-            # rgb ctrl: keep original color info
-            sketch_frame = sketch_frame
+        if "rgb_index" in video_data:
+            control_index = video_data["rgb_index"]
+        elif "sketch_index" in video_data:
+            control_index = video_data["sketch_index"]
         else:
-            # sketch ctrl: convert to black and white
-            sketch_frame = self._process_sketch_to_black_white(sketch_frame)
+            control_index = video_data["target_indices"][0]
 
-        # Apply additional transformations if defined
+        needed = sorted(set([control_index] + target_indices))
+
+        # 一次性遍历视频，只提取 needed 帧
+        frames_dict = self._load_frames_subset(os.path.join(self.video_dir, video_path), needed)
+
+        # 组装控制帧
+        control_frame = frames_dict[control_index]
+        if self.condition_type != "rgb":
+            control_frame = self._process_sketch_to_black_white(control_frame)
         if self.transform:
-            sketch_frame = self.transform(sketch_frame)
+            control_frame = self.transform(control_frame)
+        control_tensor = torch.from_numpy(control_frame).permute(2, 0, 1).float() / 255.0
+        control_tensor = control_tensor * 2.0 - 1.0
 
-        # Convert sketch frame to PyTorch tensor
-        sketch_tensor = torch.from_numpy(sketch_frame).permute(2, 0, 1).float() / 255.0
-        sketch_tensor = sketch_tensor * 2.0 - 1.0
+        # 组装目标帧（按 target_indices 顺序）
+        target_frames = []
+        for fi in target_indices:
+            fr = frames_dict[fi]
+            if self.transform:
+                fr = self.transform(fr)
+            target_frames.append(torch.from_numpy(fr).permute(2, 0, 1).float() / 255.0)
+        target_frames_tensor = torch.stack(target_frames, dim=0)  # [F, C, H, W]
 
-        # Load and preprocess target frames
-        target_frames = [self._load_video_frame(video_path, i) for i in target_indices]
-        if self.transform:
-            target_frames = [self.transform(frame) for frame in target_frames]
-        target_frames = [torch.from_numpy(frame).permute(2, 0, 1).float() / 255.0 for frame in target_frames]
-        target_frames_tensor = torch.stack(target_frames, dim=0)
+        return {"sketch": control_tensor, "video": target_frames_tensor}
 
-        return {
-            "sketch": sketch_tensor,
-            "video": target_frames_tensor,
-        }
+    def _load_frames_subset(self, video_path, needed_indices):
+        """一次读取视频，只保留 needed_indices 那些帧；返回 {idx: frame_rgb_resized}"""
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video: {video_path}")
+
+        # Get total frames and build clamped index mapping
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            cap.release()
+            raise ValueError(f"No frames could be loaded from the video: {video_path}")
+
+        needed_originals = list(needed_indices)
+        # Clamp requested indices to valid range [0, total_frames-1]
+        original_to_clamped = {orig: min(max(orig, 0), total_frames - 1) for orig in needed_originals}
+
+        # Reverse map: clamped index -> list of original indices that require this frame
+        clamped_to_originals = {}
+        for orig, clamped in original_to_clamped.items():
+            clamped_to_originals.setdefault(clamped, []).append(orig)
+
+        needed_clamped = set(original_to_clamped.values())
+
+        out = {}  # maps original index -> frame
+        idx = 0
+        target_h, target_w = self.resolution
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if idx in needed_clamped:
+                frame_resized = self._resize_with_aspect_ratio(frame, (target_h, target_w))
+                frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+                # Fill all original indices that map to this clamped idx
+                for orig in clamped_to_originals.get(idx, []):
+                    out[orig] = frame_rgb
+                # Early exit if we've satisfied all requested originals
+                if len(out) == len(needed_originals):
+                    break
+            idx += 1
+
+        cap.release()
+
+        # If some originals are still missing (e.g., we never hit the last frame due to an early read failure),
+        # try to fetch the last valid frame explicitly and fill those.
+        if len(out) != len(needed_originals):
+            missing_originals = [orig for orig in needed_originals if orig not in out]
+            if missing_originals:
+                # Read the last frame once if any missing map to it
+                need_last = any(original_to_clamped[orig] == (total_frames - 1) for orig in missing_originals)
+                last_frame_rgb = None
+                if need_last:
+                    cap2 = cv2.VideoCapture(video_path)
+                    if cap2.isOpened():
+                        cap2.set(cv2.CAP_PROP_POS_FRAMES, total_frames - 1)
+                        ret, frame = cap2.read()
+                        if ret:
+                            frame_resized = self._resize_with_aspect_ratio(frame, (target_h, target_w))
+                            last_frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+                        cap2.release()
+                # Fill what we can (currently only last frame fallback is needed for clamped requests)
+                for orig in missing_originals:
+                    clamped = original_to_clamped[orig]
+                    if clamped == total_frames - 1 and last_frame_rgb is not None:
+                        out[orig] = last_frame_rgb
+
+        # As a final guard, if still missing, do not crash—use a black frame to keep training running.
+        if len(out) != len(needed_originals):
+            remaining = [orig for orig in needed_originals if orig not in out]
+            black = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+            for orig in remaining:
+                out[orig] = black
+
+        return out
 
     def _load_video_frame(self, video_path, frame_index):
         full_path = os.path.join(self.video_dir, video_path)
@@ -437,17 +462,31 @@ class PaintCtrlDataset(Dataset):
     def _load_video_frames(self, video_path):
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
+
         cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video: {video_path}")
+
         frames = []
+        frame_count = 0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        # Pre-allocate list for better performance
+        frames = [None] * total_frames
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
             frame_resized = self._resize_with_aspect_ratio(frame, self.resolution)
             frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
-            frames.append(frame_rgb)
+            frames[frame_count] = frame_rgb
+            frame_count += 1
 
         cap.release()
+
+        # Remove None entries and return actual frames
+        frames = frames[:frame_count]
 
         if not frames:
             raise ValueError(f"No frames could be loaded from the video: {video_path}")
@@ -542,6 +581,297 @@ def save_processed_sketches(dataset, save_dir, indices):
 
 
 
+class ContinuousLineExtractor:
+    """
+    连续线条提取器 - 白底黑线，细线条，保持线条连续性
+    """
+
+    def __init__(self, line_thickness=1, noise_reduction=True, line_connection=True):
+        """
+        Args:
+            line_thickness: 线条粗细
+            noise_reduction: 是否减少噪声
+            line_connection: 是否连接断开的线条
+        """
+        self.line_thickness = line_thickness
+        self.noise_reduction = noise_reduction
+        self.line_connection = line_connection
+
+    def extract_continuous_lines(self, pil_image, method='connected_canny'):
+        """
+        提取连续线条，避免断续
+
+        Args:
+            pil_image: PIL Image对象
+            method: 提取方法
+                - 'connected_canny': 连接的Canny边缘 (推荐)
+                - 'line_linking': 线条连接算法
+                - 'gap_filling': 填充间隙
+                - 'smooth_lines': 平滑线条
+        """
+        if method == 'connected_canny':
+            return self._connected_canny_extraction(pil_image)
+        elif method == 'line_linking':
+            return self._line_linking_extraction(pil_image)
+        elif method == 'gap_filling':
+            return self._gap_filling_extraction(pil_image)
+        elif method == 'smooth_lines':
+            return self._smooth_lines_extraction(pil_image)
+        else:
+            return self._connected_canny_extraction(pil_image)
+
+    def _connected_canny_extraction(self, pil_image):
+        """
+        连接的Canny边缘检测 - 主动连接断开的线条
+        """
+        img_np = np.array(pil_image)
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+
+        # 1. 轻微预处理，保持边缘信息
+        if self.noise_reduction:
+            # 使用保边降噪
+            denoised = cv2.bilateralFilter(gray, 3, 50, 50)
+        else:
+            denoised = gray
+
+        # 2. 双阈值Canny检测
+        # 较低的低阈值帮助连接弱边缘
+        low_threshold = 50
+        high_threshold = 150
+        edges = cv2.Canny(denoised, low_threshold, high_threshold, apertureSize=3, L2gradient=True)
+
+        # 3. 连接断开的线条
+        if self.line_connection:
+            edges = self._connect_broken_lines(edges)
+
+        # 4. 最后清理 - 只去除明显的噪声点，不影响线条连续性
+        if self.noise_reduction:
+            edges = self._gentle_noise_removal(edges)
+
+        return self._create_white_background_image(edges)
+
+    def _line_linking_extraction(self, pil_image):
+        """
+        线条连接算法 - 使用HoughLines检测并连接线段
+        """
+        img_np = np.array(pil_image)
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+
+        # 1. 边缘检测
+        edges = cv2.Canny(gray, 60, 180)
+
+        # 2. 检测线段
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=30,
+                                minLineLength=10, maxLineGap=15)  # 增大maxLineGap连接更多线段
+
+        # 3. 在新图像上绘制连接的线条
+        line_image = np.zeros_like(edges)
+
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(line_image, (x1, y1), (x2, y2), 255, self.line_thickness)
+
+        # 4. 补充原始边缘信息
+        combined = cv2.bitwise_or(line_image, edges)
+
+        # 5. 进一步连接
+        if self.line_connection:
+            combined = self._connect_nearby_endpoints(combined)
+
+        return self._create_white_background_image(combined)
+
+    def _gap_filling_extraction(self, pil_image):
+        """
+        间隙填充提取 - 专门填充线条间的小间隙
+        """
+        img_np = np.array(pil_image)
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+
+        # 1. 基础边缘检测
+        edges = cv2.Canny(gray, 60, 160)
+
+        # 2. 形态学操作填充小间隙
+        # 使用线性核连接水平和垂直方向的线条
+
+        # 水平连接
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1))
+        horizontal_connected = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, horizontal_kernel)
+
+        # 垂直连接
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
+        vertical_connected = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, vertical_kernel)
+
+        # 斜向连接
+        diagonal_kernel1 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.uint8)
+        diagonal_kernel2 = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]], dtype=np.uint8)
+        diagonal_connected1 = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, diagonal_kernel1)
+        diagonal_connected2 = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, diagonal_kernel2)
+
+        # 3. 组合所有方向的连接
+        connected = cv2.bitwise_or(horizontal_connected, vertical_connected)
+        connected = cv2.bitwise_or(connected, diagonal_connected1)
+        connected = cv2.bitwise_or(connected, diagonal_connected2)
+
+        # 4. 自定义细化保持线条粗细
+        if self.line_thickness == 1:
+            connected = self._custom_thinning(connected)
+
+        return self._create_white_background_image(connected)
+
+    def _smooth_lines_extraction(self, pil_image):
+        """
+        平滑线条提取 - 创建更平滑的连续线条
+        """
+        img_np = np.array(pil_image)
+        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+
+        # 1. 轻微模糊创建更连续的边缘
+        slightly_blurred = cv2.GaussianBlur(gray, (3, 3), 0.5)
+
+        # 2. 梯度幅度计算
+        grad_x = cv2.Sobel(slightly_blurred, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(slightly_blurred, cv2.CV_64F, 0, 1, ksize=3)
+        magnitude = np.sqrt(grad_x ** 2 + grad_y ** 2)
+
+        # 3. 自适应阈值创建连续边缘
+        magnitude_norm = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+        _, smooth_edges = cv2.threshold(magnitude_norm, 30, 255, cv2.THRESH_BINARY)
+
+        # 4. 温和的连接操作
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        smooth_connected = cv2.morphologyEx(smooth_edges, cv2.MORPH_CLOSE, kernel)
+
+        # 5. 自定义细化到单像素
+        if self.line_thickness == 1:
+            smooth_connected = self._custom_thinning(smooth_connected)
+
+        return self._create_white_background_image(smooth_connected)
+
+    def _connect_broken_lines(self, binary_image, max_gap=5):
+        """
+        连接断开的线条
+        """
+        # 使用不同方向的核连接断开的线条
+        kernels = [
+            cv2.getStructuringElement(cv2.MORPH_RECT, (max_gap, 1)),  # 水平
+            cv2.getStructuringElement(cv2.MORPH_RECT, (1, max_gap)),  # 垂直
+            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),  # 小范围连接
+        ]
+
+        connected = binary_image.copy()
+        for kernel in kernels:
+            connected = cv2.morphologyEx(connected, cv2.MORPH_CLOSE, kernel)
+
+        return connected
+
+    def _connect_nearby_endpoints(self, binary_image, max_distance=8):
+        """
+        连接附近的端点
+        """
+        # 找到线条的端点
+        endpoints = self._find_endpoints(binary_image)
+
+        result = binary_image.copy()
+
+        # 连接距离较近的端点
+        for i, (x1, y1) in enumerate(endpoints):
+            for j, (x2, y2) in enumerate(endpoints[i + 1:], i + 1):
+                distance = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+                if distance <= max_distance:
+                    cv2.line(result, (x1, y1), (x2, y2), 255, 1)
+
+        return result
+
+    def _find_endpoints(self, binary_image):
+        """
+        找到线条的端点
+        """
+        # 使用3x3窗口检测端点（只有一个或两个邻居的点）
+        kernel = np.ones((3, 3), np.uint8)
+        kernel[1, 1] = 0
+
+        # 计算每个点的邻居数量
+        neighbors = cv2.filter2D(binary_image // 255, -1, kernel)
+
+        # 端点：有1个邻居的点
+        endpoints_mask = (binary_image > 0) & (neighbors == 1)
+
+        # 获取端点坐标
+        y_coords, x_coords = np.where(endpoints_mask)
+        endpoints = list(zip(x_coords, y_coords))
+
+        return endpoints
+
+    def _gentle_noise_removal(self, binary_image, min_area=8):
+        """
+        温和的噪声去除 - 不会断开线条
+        """
+        # 只去除非常小的连通区域
+        contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        clean_image = binary_image.copy()
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < min_area:
+                # 检查是否是孤立的噪声点（没有连接到其他线条）
+                mask = np.zeros_like(binary_image)
+                cv2.drawContours(mask, [contour], -1, 255, -1)
+
+                # 膨胀一点看是否连接到其他线条
+                dilated_mask = cv2.dilate(mask, np.ones((3, 3), np.uint8))
+                overlap = cv2.bitwise_and(binary_image, dilated_mask)
+
+                # 如果膨胀后没有明显重叠，认为是噪声
+                if cv2.countNonZero(overlap) <= cv2.countNonZero(mask) + 5:
+                    cv2.drawContours(clean_image, [contour], -1, 0, -1)
+
+        return clean_image
+
+    def _custom_thinning(self, binary_image):
+        """
+        自定义细化算法 - 替代cv2.ximgproc.thinning
+        """
+        # 使用简单的骨架化算法
+        return self._skeletonize(binary_image)
+
+    def _skeletonize(self, binary_img):
+        """
+        骨架化算法 - 得到单像素宽度的线条
+        """
+        skeleton = np.zeros(binary_img.shape, np.uint8)
+        eroded = binary_img.copy()
+        kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+
+        while True:
+            temp = cv2.morphologyEx(eroded, cv2.MORPH_OPEN, kernel)
+            temp = cv2.subtract(eroded, temp)
+            skeleton = cv2.bitwise_or(skeleton, temp)
+            eroded = cv2.erode(eroded, kernel)
+
+            if cv2.countNonZero(eroded) == 0:
+                break
+
+        return skeleton
+
+    def _create_white_background_image(self, line_mask):
+        """
+        创建白底黑线图像
+        """
+        # 创建白色背景
+        white_background = np.full((*line_mask.shape, 3), 255, dtype=np.uint8)
+
+        # 设置线条为黑色
+        line_positions = line_mask > 0
+        white_background[line_positions] = [0, 0, 0]
+
+        return Image.fromarray(white_background)
+
 
 class PaintDataset(Dataset):
     def __init__(
@@ -552,76 +882,75 @@ class PaintDataset(Dataset):
             sample_size=256,
             sample_n_frames=16,
             transform=None,
+            enhance_early_stages=True,
+            early_stage_frames=4,
+            line_extraction_method='connected_canny',  # 连续线条提取
+            line_connection=True,  # 启用线条连接
+            noise_reduction=True,
             **kwargs
     ):
         """
-        PaintDataset for loading painting process videos with frame sampling
+        PaintDataset - 连续线条版本，解决断续问题
 
         Args:
-            video_json_path: Path to the JSONL file containing video information
-            video_folder: Path to the folder containing video files
-            csv_path: Path to CSV file containing prompts for each video ID
-            sample_size: Size to resize frames to
-            sample_n_frames: Number of frames to extract (should be 16)
-            transform: Optional transform to apply to frames
+            line_extraction_method: 线条提取方法
+                - 'connected_canny': 连接的Canny边缘 (推荐)
+                - 'line_linking': HoughLines线条连接
+                - 'gap_filling': 间隙填充算法
+                - 'smooth_lines': 平滑线条提取
+            line_connection: 是否启用线条连接
         """
         self.video_folder = video_folder
         self.sample_size = sample_size
         self.sample_n_frames = sample_n_frames
         self.transform = transform
 
-        # Load video data from JSONL file
+        # 连续线条设置
+        self.enhance_early_stages = enhance_early_stages
+        self.early_stage_frames = early_stage_frames
+        self.line_extraction_method = line_extraction_method
+        self.line_connection = line_connection
+        self.noise_reduction = noise_reduction
+
+        # 初始化连续线条提取器
+        self.line_extractor = ContinuousLineExtractor(
+            line_thickness=1,
+            noise_reduction=noise_reduction,
+            line_connection=line_connection
+        )
+
+        # Load data
         self.video_data = []
         with open(video_json_path, 'r') as f:
             for line in f:
                 data = json.loads(line.strip())
                 self.video_data.append(data)
         random.shuffle(self.video_data)
-        print(f"Shuffled {len(self.video_data)} video samples")
 
-        # Load CSV annotations - assuming CSV has columns like 'videoid' and 'prompt'
-        self.annotations = pd.read_csv(csv_path, dtype={'videoid': str}
-)
+        self.annotations = pd.read_csv(csv_path, dtype={'videoid': str})
 
-        # Create a mapping from videoid to prompt for faster lookup
+        # Create prompt mapping
         self.prompt_mapping = {}
         jsonl_videoids = set(item['videoid'] for item in self.video_data)
 
-        # 创建映射时进行灵活匹配
         matched_count = 0
-        unmatched_csv_ids = []
         for _, row in self.annotations.iterrows():
             csv_videoid = str(row.get('videoid', ''))
             prompt = str(row.get('prompt', ''))
 
-            # 首先尝试精确匹配
             if csv_videoid in jsonl_videoids:
                 self.prompt_mapping[csv_videoid] = prompt
                 matched_count += 1
             else:
-                # 尝试添加.mp4扩展名
                 if f"{csv_videoid}.mp4" in jsonl_videoids:
                     self.prompt_mapping[f"{csv_videoid}.mp4"] = prompt
                     matched_count += 1
-                # 尝试移除.mp4扩展名
                 elif csv_videoid.endswith('.mp4'):
                     base_name = csv_videoid[:-4]
                     if base_name in jsonl_videoids:
                         self.prompt_mapping[base_name] = prompt
                         matched_count += 1
-                else:
-                    unmatched_csv_ids.append(csv_videoid)
 
-        print(f"Successfully matched {matched_count} videoids between CSV and JSONL")
-        print(f"Total CSV entries: {len(self.annotations)}")
-        print(f"Total JSONL entries: {len(self.video_data)}")
-
-        if unmatched_csv_ids:
-            print(f"\n未匹配的CSV videoid (前5个):")
-            for i, vid in enumerate(unmatched_csv_ids[:5]):
-                print(f"  未匹配: '{vid}'")
-
-        # Default transform if none provided
         if self.transform is None:
             self.transform = transforms.Compose([
                 transforms.Resize((sample_size, sample_size)),
@@ -629,8 +958,16 @@ class PaintDataset(Dataset):
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             ])
 
-        print(f"Loaded {len(self.video_data)} samples from {video_json_path}")
-        print(f"Loaded {len(self.prompt_mapping)} prompts from {csv_path}")
+        print(f"=== PaintDataset 连续线条模式 (无ximgproc依赖) ===")
+        print(f"视频样本数量: {len(self.video_data)}")
+        print(f"匹配的Prompt数量: {matched_count}")
+        print(f"连续线条设置:")
+        print(f"  ✓ enhance_early_stages: {self.enhance_early_stages}")
+        print(f"  ✓ early_stage_frames: {self.early_stage_frames}")
+        print(f"  ✓ line_extraction_method: {self.line_extraction_method}")
+        print(f"  ✓ line_connection: {self.line_connection} (解决断续问题)")
+        print(f"  ✓ 效果: 白底黑线，连续细线条，减少断续")
+        print(f"====================================================")
 
     def __len__(self):
         return len(self.video_data)
@@ -640,63 +977,42 @@ class PaintDataset(Dataset):
         videoid = video_info['videoid']
         sampled_indices = video_info['sampled_indices']
 
-        # Construct video file path
         video_path = os.path.join(self.video_folder, videoid)
-
-        # Check if video file exists
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        # Extract frames from video
-        frames = self._extract_frames_from_video(video_path, sampled_indices)
+        # 提取连续线条
+        frames = self._extract_frames_with_continuous_lines(video_path, sampled_indices)
 
-        # Apply transforms to each frame
+        # Apply transforms
         transformed_frames = []
         for frame in frames:
             if self.transform:
                 frame = self.transform(frame)
             transformed_frames.append(frame)
 
-        # Stack frames into a tensor [C, T, H, W] or [T, C, H, W] depending on your model
-        video_tensor = torch.stack(transformed_frames)  # Shape: [T, C, H, W]
+        video_tensor = torch.stack(transformed_frames)
 
-        # Get prompt for this video
+        # Get prompt
         prompt = self.prompt_mapping.get(videoid, "")
         if not prompt:
-            # 尝试备用匹配
             base_videoid = videoid.replace('.mp4', '') if videoid.endswith('.mp4') else f"{videoid}.mp4"
             prompt = self.prompt_mapping.get(base_videoid, "")
-
             if not prompt:
-                # 只在第一次遇到时打印warning，避免重复输出
-                if not hasattr(self, '_warned_ids'):
-                    self._warned_ids = set()
-                if videoid not in self._warned_ids:
-                    print(f"Warning: No prompt found for videoid {videoid}")
-                    self._warned_ids.add(videoid)
-                # 使用默认prompt而不是空字符串
                 prompt = "Painting process: sketch → line art → base colors → shading."
 
-        # Prepare return dictionary
         sample = {
-            'pixel_values': video_tensor,  # The video frames
-            'text': prompt,  # The prompt text
-            'videoid': videoid,  # Video ID for debugging
-            'sampled_indices': sampled_indices  # Frame indices for debugging
+            'pixel_values': video_tensor,
+            'text': prompt,
+            'videoid': videoid,
+            'sampled_indices': sampled_indices
         }
 
         return sample
 
-    def _extract_frames_from_video(self, video_path, sampled_indices):
+    def _extract_frames_with_continuous_lines(self, video_path, sampled_indices):
         """
-        Extract frames from video at specified indices
-
-        Args:
-            video_path: Path to video file
-            sampled_indices: List of frame indices to extract
-
-        Returns:
-            List of PIL Images
+        提取连续线条帧
         """
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
@@ -704,134 +1020,136 @@ class PaintDataset(Dataset):
 
         frames = []
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        # Sort indices to read frames in order (more efficient)
         sorted_indices = sorted(sampled_indices)
 
+        # 提取所有帧
         for frame_idx in sorted_indices:
-            # Check if frame index is valid
             if frame_idx >= total_frames:
-                print(f"Warning: Frame index {frame_idx} exceeds video length {total_frames} for {video_path}")
-                # Use last frame if index is out of bounds
                 frame_idx = total_frames - 1
 
-            # Set frame position
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
 
             if ret:
-                # Convert BGR to RGB
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                # Convert to PIL Image
                 pil_image = Image.fromarray(frame_rgb)
                 frames.append(pil_image)
             else:
-                print(f"Warning: Could not read frame {frame_idx} from {video_path}")
-                # Create a black frame as fallback
-                black_frame = np.zeros((self.sample_size, self.sample_size, 3), dtype=np.uint8)
-                frames.append(Image.fromarray(black_frame))
+                white_frame = np.full((self.sample_size, self.sample_size, 3), 255, dtype=np.uint8)
+                frames.append(Image.fromarray(white_frame))
 
         cap.release()
 
-        # Reorder frames to match original sampled_indices order
+        # 重新排序
         if sorted_indices != sampled_indices:
             index_mapping = {idx: i for i, idx in enumerate(sorted_indices)}
             reordered_frames = [frames[index_mapping[idx]] for idx in sampled_indices]
             frames = reordered_frames
 
-        # Ensure we have exactly sample_n_frames frames
+        # 确保帧数正确
         if len(frames) != self.sample_n_frames:
-            print(f"Warning: Expected {self.sample_n_frames} frames, got {len(frames)} for {video_path}")
-            # Pad with last frame if needed
             while len(frames) < self.sample_n_frames:
-                frames.append(frames[-1] if frames else Image.new('RGB', (self.sample_size, self.sample_size)))
-            # Truncate if too many
+                frames.append(frames[-1] if frames else Image.new('RGB', (self.sample_size, self.sample_size), 'white'))
             frames = frames[:self.sample_n_frames]
+
+        # 🎯 前四帧转换为连续线条
+        if self.enhance_early_stages:
+            processed_frames = []
+            for i, frame in enumerate(frames):
+                if i < self.early_stage_frames:
+                    # 提取连续线条
+                    continuous_line_frame = self.line_extractor.extract_continuous_lines(
+                        frame, self.line_extraction_method
+                    )
+                    processed_frames.append(continuous_line_frame)
+
+                    # 调试保存
+                    if hasattr(self, '_debug_save') and self._debug_save and i < 2:
+                        debug_dir = "/workspace/debug_continuous_lines"
+                        os.makedirs(debug_dir, exist_ok=True)
+                        frame.save(f"{debug_dir}/original_frame_{i}.png")
+                        continuous_line_frame.save(
+                            f"{debug_dir}/continuous_line_frame_{i}_{self.line_extraction_method}.png")
+                else:
+                    # 后续帧保持原样
+                    processed_frames.append(frame)
+
+            frames = processed_frames
 
         return frames
 
-    def get_video_info(self, idx):
-        """
-        Get video information for debugging
-        """
-        video_info = self.video_data[idx]
-        videoid = video_info['videoid']
-        prompt = self.prompt_mapping.get(videoid, "")
+    def enable_debug_save(self):
+        """启用调试保存"""
+        self._debug_save = True
+        print("Debug save enabled. Continuous line frames will be saved to /workspace/debug_continuous_lines/")
 
-        return {
-            'videoid': videoid,
-            'prompt': prompt,
-            'sampled_indices': video_info['sampled_indices'],
-            'sample_count': len([v for v in self.video_data if v['videoid'] == videoid])
-        }
-
-    def get_unique_videos(self):
+    def test_continuous_lines(self, num_samples=3, output_dir="/workspace/continuous_line_test"):
         """
-        Get list of unique video IDs and their sample counts
-        """
-        video_counts = {}
-        for video_info in self.video_data:
-            videoid = video_info['videoid']
-            video_counts[videoid] = video_counts.get(videoid, 0) + 1
-        return video_counts
-
-    def test_save_first_ten_videos(self, output_dir="/workspace/video_ctrl/test_output"):
-        """
-        Test function to save the first 10 video samples as images
+        测试连续线条效果
         """
         os.makedirs(output_dir, exist_ok=True)
+        print(f"测试连续线条效果，解决断续问题，保存到: {output_dir}")
 
-        for i in range(min(10, len(self))):
+        for i in range(min(num_samples, len(self))):
             try:
-                # Get sample without transforms to save original images
-                video_info = self.video_data[i]
-                videoid = video_info['videoid']
-                sampled_indices = video_info['sampled_indices']
+                sample = self[i]
+                video_tensor = sample['pixel_values']
+                videoid = sample['videoid']
 
-                video_path = os.path.join(self.video_folder, videoid)
-                frames = self._extract_frames_from_video(video_path, sampled_indices)
+                test_dir = os.path.join(output_dir, f"test_{i:02d}_{videoid.split('.')[0]}")
+                os.makedirs(test_dir, exist_ok=True)
 
-                # Get prompt
-                prompt = self.prompt_mapping.get(videoid, "No prompt")
+                for j in range(video_tensor.shape[0]):
+                    frame_tensor = video_tensor[j]
+                    frame_np = ((frame_tensor + 1.0) / 2.0).clamp(0, 1)
+                    frame_np = (frame_np * 255).byte().permute(1, 2, 0).numpy()
+                    frame_pil = Image.fromarray(frame_np)
 
-                # Create folder for this sample
-                sample_dir = os.path.join(output_dir, f"sample_{i:02d}_{videoid.split('.')[0]}")
-                os.makedirs(sample_dir, exist_ok=True)
+                    if j < self.early_stage_frames and self.enhance_early_stages:
+                        frame_name = f"frame_{j:02d}_CONTINUOUS_LINES_{self.line_extraction_method}.jpg"
+                    else:
+                        frame_name = f"frame_{j:02d}_ORIGINAL.jpg"
 
-                # Save info
-                with open(os.path.join(sample_dir, "info.txt"), "w") as f:
+                    frame_pil.save(os.path.join(test_dir, frame_name))
+
+                # 保存信息
+                with open(os.path.join(test_dir, "continuous_line_info.txt"), "w") as f:
                     f.write(f"Video ID: {videoid}\n")
-                    f.write(f"Prompt: {prompt}\n")
-                    f.write(f"Sampled indices: {sampled_indices}\n")
-                    f.write(f"Number of frames: {len(frames)}\n")
+                    f.write(f"Continuous line extraction: {self.enhance_early_stages}\n")
+                    f.write(f"Line connection enabled: {self.line_connection}\n")
+                    f.write(f"Method: {self.line_extraction_method}\n")
+                    f.write(f"改进特点:\n")
+                    f.write(f"  - 解决线条断续问题\n")
+                    f.write(f"  - 主动连接断开的线条\n")
+                    f.write(f"  - 填充小间隙\n")
+                    f.write(f"  - 保持线条连续性\n")
+                    f.write(f"  - 移除了cv2.ximgproc依赖\n")
 
-                # Save frames
-                for j, frame in enumerate(frames):
-                    frame_path = os.path.join(sample_dir, f"frame_{j:02d}_idx_{sampled_indices[j]}.jpg")
-                    frame.save(frame_path)
-
-                print(f"Saved sample {i}: {videoid} -> {sample_dir}")
+                print(f"✓ Continuous line test {i} completed: {test_dir}")
 
             except Exception as e:
-                print(f"Error processing sample {i}: {e}")
+                print(f"✗ Error testing sample {i}: {e}")
 
-        print(f"Test completed! Check {output_dir} directory for results.")
+        print(f"连续线条测试完成! 查看结果: {output_dir}")
 
 
 if __name__ == "__main__":
-    # 测试数据集
+    print("🎨 测试PaintDataset连续线条功能 (无ximgproc依赖)...")
+
     dataset = PaintDataset(
         video_json_path="/workspace/video_ctrl/video_16_enhance.jsonl",
         video_folder="/workspace/video_ctrl/videos",
         csv_path="/workspace/final_frame/annotation_ctrl.csv",
         sample_size=256,
-        sample_n_frames=16
+        sample_n_frames=16,
+        enhance_early_stages=True,
+        early_stage_frames=4,
+        line_extraction_method='connected_canny',  # 推荐
+        line_connection=True,  # 启用线条连接
+        noise_reduction=True
     )
 
-    # 保存前10个样本
-    dataset.test_save_first_ten_videos()
+    # 测试连续线条效果
+    dataset.test_continuous_lines(num_samples=5)
 
-
-
-
-
+    print("✅ 连续线条测试完成！解决了断续问题，无需ximgproc。")

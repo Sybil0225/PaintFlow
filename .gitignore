@@ -1,1 +1,6 @@
 models/
+train_sparsectrl_rgb.py
+animate_gui.py
+
+!paintflow/
+!paintflow/models
