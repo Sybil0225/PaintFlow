@@ -36,7 +36,7 @@ import transformers
 from transformers import CLIPTextModel, CLIPTokenizer
 from transformers.trainer_utils import is_main_process
 
-from paintflow.data.dataset import WebVid10M, PaintDataset
+from paintflow.data.dataset import PaintDataset
 from paintflow.models.unet import UNet3DConditionModel
 from paintflow.pipelines.pipeline_animation import AnimationPipeline
 from paintflow.utils.util import save_videos_grid, zero_rank_print
