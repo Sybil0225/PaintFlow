@@ -1,3 +1,4 @@
+import re
 import json
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -8,6 +9,19 @@ from torch.utils.data import Dataset
 import random
 import cv2
 import torchvision.transforms as transforms
+
+
+def load_split(split_file):
+    """Read a CoPaint split file (one id per line, e.g. '0304' or '00012.jpg'); returns a set of ids without extension."""
+    if not split_file:
+        return None
+    with open(split_file) as f:
+        return {os.path.splitext(l.strip())[0] for l in f if l.strip()}
+
+
+def _vid(x):
+    """'0304', '0304.mp4' or '/any/path/0304.mp4' -> '0304'"""
+    return os.path.splitext(os.path.basename(str(x)))[0]
 
 
 class PaintVideo(Dataset):
@@ -22,6 +36,7 @@ class PaintVideo(Dataset):
         transform=None,
         enhance_early_stages=True,
         early_stage_frames=4,
+        split_file=None,
         **kwargs
 
     ):
@@ -38,6 +53,10 @@ class PaintVideo(Dataset):
         # 加载 CSV 文件，并强制将 videoid 列读取为字符串
         assert os.path.exists(csv_path), f"找不到 CSV 文件：{csv_path}"
         self.data = pd.read_csv(self.csv_path, dtype={'videoid': str})  # 使用 dtype 参数保留前导零
+        self.data['videoid'] = self.data['videoid'].apply(_vid)
+        split = load_split(split_file)
+        if split is not None:
+            self.data = self.data[self.data['videoid'].isin(split)].reset_index(drop=True)
 
         # 生成视频路径列，拼接为完整路径，例如 "0001" -> "/workspace/test/videos/0001.mp4"
         self.data['video_path'] = self.data['videoid'].apply(lambda x: os.path.join(self.video_folder, f"{x}.mp4"))
@@ -123,9 +142,10 @@ class PaintVideo(Dataset):
 
         return final_enhanced
 
-    def _extract_frames_from_video(self, video_path, sampled_indices):
+    def _extract_frames_from_video(self, video_path, sampled_indices=None):
         """
         从视频中提取帧，并对前几帧进行线条增强
+        sampled_indices=None -> sample_n_frames uniformly spaced frames over the whole video
         """
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
@@ -133,6 +153,8 @@ class PaintVideo(Dataset):
 
         frames = []
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if sampled_indices is None:
+            sampled_indices = np.linspace(0, total_frames - 1, self.sample_n_frames, dtype=int).tolist()
         sorted_indices = sorted(sampled_indices)
 
         for frame_idx in sorted_indices:
@@ -296,7 +318,7 @@ class PaintVideo(Dataset):
 
 class PaintCtrlDataset(Dataset):
     def __init__(self, video_dir, annotations_path, sketch2video_path=None, condition_type="rgb", transform=None,
-                 resolution=(512, 512)):
+                 resolution=(512, 512), split_file=None, max_groups_per_video=2):
         """
         Args:
             video_dir (str): Path to the directory containing video files.
@@ -312,10 +334,19 @@ class PaintCtrlDataset(Dataset):
         self.transform = transform
         self.resolution = resolution
         self.sketch2video_data = []
+        self.max_groups_per_video = max_groups_per_video
+        split = load_split(split_file)
         if sketch2video_path:
             with open(sketch2video_path, 'r') as f:
                 for line in f:
-                    self.sketch2video_data.append(json.loads(line))
+                    if not line.strip():
+                        continue
+                    entry = json.loads(line)
+                    # CoPaint release stores video_path relative to video_dir ('0304.mp4');
+                    # old server jsonl used absolute /workspace paths -> keep only the file name
+                    entry["video_path"] = os.path.basename(entry.get("video_path") or entry["videoid"])
+                    if split is None or _vid(entry["video_path"]) in split:
+                        self.sketch2video_data.append(entry)
         self.video_sample_mapping = self._prepare_samples()
 
     def _prepare_samples(self):
@@ -323,7 +354,7 @@ class PaintCtrlDataset(Dataset):
         mapping = []
         for video_idx, video_data in enumerate(self.sketch2video_data):
             num_groups = len(video_data["target_indices"]) // 16
-            num_groups = min(num_groups, 2)
+            num_groups = max(1, min(num_groups, self.max_groups_per_video))
             for group_idx in range(num_groups):
                 mapping.append((video_idx, group_idx))
         return mapping
@@ -339,7 +370,7 @@ class PaintCtrlDataset(Dataset):
         # 计算需要的帧索引（控制帧 + 目标帧 16 个）
         start_idx = group_idx * 16
         end_idx = min(start_idx + 16, len(video_data["target_indices"]))
-        target_indices = video_data["target_indices"][start_idx:end_idx]
+        target_indices = list(video_data["target_indices"][start_idx:end_idx])  # copy: padding below must not mutate the cache
         while len(target_indices) < 16:
             target_indices.append(target_indices[-1])
 
@@ -887,6 +918,7 @@ class PaintDataset(Dataset):
             line_extraction_method='connected_canny',  # 连续线条提取
             line_connection=True,  # 启用线条连接
             noise_reduction=True,
+            split_file=None,
             **kwargs
     ):
         """
@@ -921,10 +953,16 @@ class PaintDataset(Dataset):
 
         # Load data
         self.video_data = []
+        split = load_split(split_file)
         with open(video_json_path, 'r') as f:
             for line in f:
+                if not line.strip():
+                    continue
                 data = json.loads(line.strip())
-                self.video_data.append(data)
+                # accept both {"videoid": "0304.mp4"} (release) and {"video_path": "/abs/0304.mp4"} (old)
+                data['videoid'] = _vid(data.get('videoid') or data['video_path']) + '.mp4'
+                if split is None or _vid(data['videoid']) in split:
+                    self.video_data.append(data)
         random.shuffle(self.video_data)
 
         self.annotations = pd.read_csv(csv_path, dtype={'videoid': str})
@@ -1131,6 +1169,33 @@ class PaintDataset(Dataset):
                 print(f"✗ Error testing sample {i}: {e}")
 
         print(f"连续线条测试完成! 查看结果: {output_dir}")
+
+
+class PaintStaticDataset(Dataset):
+    """PaintStatic stage-labelled image-text pairs.
+    captions.json: [{"image": "00012.jpg", "text": "[s0:Sketch] <caption>"}]
+    Returns pixel_values in [-1, 1], the caption text and stage_idx (0 Sketch, 1 Line, 2 BaseColor, 3 LightShadow)."""
+    STAGE_PATTERN = re.compile(r"\[s(\d+):[^\]]+\]")
+
+    def __init__(self, captions_file, images_dir, sample_size=512, split_file=None, transform=None):
+        with open(captions_file, encoding="utf-8") as f:
+            items = json.load(f)
+        split = load_split(split_file)
+        self.items = [x for x in items if split is None or _vid(x["image"]) in split]
+        self.images_dir = images_dir
+        self.transform = transform or transforms.Compose([
+            transforms.Resize(sample_size), transforms.CenterCrop(sample_size),
+            transforms.ToTensor(), transforms.Normalize([0.5] * 3, [0.5] * 3)])
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        item = self.items[idx]
+        image = Image.open(os.path.join(self.images_dir, item["image"])).convert("RGB")
+        m = self.STAGE_PATTERN.search(item["text"])
+        return {"pixel_values": self.transform(image), "text": item["text"],
+                "stage_idx": int(m.group(1)) if m else -1, "image": item["image"]}
 
 
 if __name__ == "__main__":

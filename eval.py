@@ -53,7 +53,8 @@ class VideoEvaluator:
             sample_size=args.sample_size,
             sample_stride=args.sample_stride,
             sample_n_frames=args.sample_n_frames,
-            is_image=False
+            is_image=False,
+            split_file=args.test_split
         )
 
         # 初始化DataLoader
@@ -408,8 +409,9 @@ class VideoEvaluator:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # 数据集参数
-    parser.add_argument("--test_csv", type=str, default="/workspace/test/test.csv", help="测试集CSV路径")
-    parser.add_argument("--test_dir", type=str, default="/workspace/test/videos", help="测试视频目录")
+    parser.add_argument("--test_csv", type=str, default="/workspace/CoPaint_datasets/PaintDynamic/annotations/annotation_ctrl.csv", help="测试集CSV路径")
+    parser.add_argument("--test_dir", type=str, default="/workspace/CoPaint_datasets/PaintDynamic/videos", help="测试视频目录")
+    parser.add_argument("--test_split", type=str, default="/workspace/CoPaint_datasets/PaintDynamic/annotations/splits/test.txt", help="split file (video ids); '' = all videos")
     parser.add_argument("--sample_size", type=int, default=256, help="视频分辨率")
     parser.add_argument("--sample_stride", type=int, default=1, help="帧采样步长")
     parser.add_argument("--sample_n_frames", type=int, default=16, help="每段视频采样帧数")

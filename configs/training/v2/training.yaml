@@ -35,9 +35,10 @@ noise_scheduler_kwargs:
   clip_sample:         false
 
 train_data:
-  csv_path:        "/workspace/final_frame/annotation_ctrl.csv"
-  video_folder:    "/workspace/video_ctrl/videos"
-  video_json_path: "/workspace/video_ctrl/video_16_enhance.jsonl"
+  csv_path:        "/workspace/CoPaint_datasets/PaintDynamic/annotations/annotation_ctrl.csv"
+  video_folder:    "/workspace/CoPaint_datasets/PaintDynamic/videos"
+  video_json_path: "/workspace/CoPaint_datasets/PaintDynamic/annotations/t2v_clips.jsonl"
+  split_file:      "/workspace/CoPaint_datasets/PaintDynamic/annotations/splits/train.txt"
   sample_size:     256
   sample_stride:   1
   sample_n_frames: 16

@@ -363,6 +363,7 @@ def main(
     sketch2video_path=train_data.get("video_json_path", "/workspace/video_ctrl/sketch2video_dataset.jsonl"),
     condition_type="sketch",
     resolution=(train_data.get("sample_size", 256), train_data.get("sample_size", 256)),
+        split_file=train_data.get("split_file", None),
 
     )
 
