@@ -14,7 +14,7 @@ CoPaint_datasets/
   PaintDynamic/
     videos/<videoid>.mp4
     frames/<clip_id>/00-15.jpg            16 frames of each clip in t2v_clips.jsonl
-    annotations/annotation_ctrl.csv       videoid, prompt
+    annotations/annotation_ctrl.csv       clip_id, videoid, prompt   (one prompt per clip)
     annotations/t2v_clips.jsonl           {"clip_id", "videoid", "sampled_indices"[16], "stage_idx"[16], ...}
     annotations/sketchctrl_clips.jsonl    {"video_path", "sketch_index", "target_indices"}
     annotations/rgbctrl_clips.jsonl       {"video_path", "rgb_index", "target_indices"}

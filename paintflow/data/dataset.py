@@ -54,6 +54,8 @@ class PaintVideo(Dataset):
         assert os.path.exists(csv_path), f"找不到 CSV 文件：{csv_path}"
         self.data = pd.read_csv(self.csv_path, dtype={'videoid': str})  # 使用 dtype 参数保留前导零
         self.data['videoid'] = self.data['videoid'].apply(_vid)
+        # per-clip annotation csv (clip_id, videoid, prompt): keep one row per video for evaluation
+        self.data = self.data.drop_duplicates('videoid').reset_index(drop=True)
         split = load_split(split_file)
         if split is not None:
             self.data = self.data[self.data['videoid'].isin(split)].reset_index(drop=True)
@@ -965,7 +967,10 @@ class PaintDataset(Dataset):
                     self.video_data.append(data)
         random.shuffle(self.video_data)
 
-        self.annotations = pd.read_csv(csv_path, dtype={'videoid': str})
+        self.annotations = pd.read_csv(csv_path, dtype={'videoid': str, 'clip_id': str})
+        # release format: one prompt per clip (clip_id, videoid, prompt)
+        self.clip_prompts = (dict(zip(self.annotations['clip_id'], self.annotations['prompt']))
+                             if 'clip_id' in self.annotations.columns else {})
 
         # Create prompt mapping
         self.prompt_mapping = {}
@@ -1031,8 +1036,8 @@ class PaintDataset(Dataset):
 
         video_tensor = torch.stack(transformed_frames)
 
-        # Get prompt
-        prompt = self.prompt_mapping.get(videoid, "")
+        # Get prompt (per clip if available, else per video)
+        prompt = self.clip_prompts.get(str(video_info.get('clip_id', '')), "") or self.prompt_mapping.get(videoid, "")
         if not prompt:
             base_videoid = videoid.replace('.mp4', '') if videoid.endswith('.mp4') else f"{videoid}.mp4"
             prompt = self.prompt_mapping.get(base_videoid, "")
