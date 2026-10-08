@@ -4,6 +4,8 @@ PaintFlow generates painting-process videos. PaintCtrl adds RGB and sketch condi
 
 ## Model weights
 
+Model access is restricted and granted on request for non-commercial research only. Commercial use is not permitted.
+
 | Model | Checkpoint |
 |---|---|
 | PaintFlow | `1-checkpoint.ckpt` |
