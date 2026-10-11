@@ -4,10 +4,10 @@
   dreambooth_path:    "/workspace/anyloraCheckpoint_bakedvaeBlessedFp16.safetensors"
 
   inference_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/inference-v7.yaml"
-  motion_module:    "/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints/checkpoint-epoch-52.ckpt"
+  motion_module: "paintflow.ckpt"
 
   controlnet_config: "/workspace/AnimateDiff/PaintFlow/configs/inference/sparsectrl/latent_condition.yaml"
-  controlnet_path:   "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_sketch/train_sketch_ctrl-2025-08-20T06-37-12/checkpoints/sparsectrl-sketch-checkpoint.ckpt"
+  controlnet_path:   "sketchctrl.ckpt"
 
   seed: -1
   steps: 50

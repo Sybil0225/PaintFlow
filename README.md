@@ -8,17 +8,17 @@ Model access is restricted and granted on request for non-commercial research on
 
 | Model | Checkpoint |
 |---|---|
-| PaintFlow | `1-checkpoint.ckpt` |
-| RGB control | `sparsectrl-rgb-checkpoint.ckpt` |
-| Sketch control | `sparsectrl-sketch-checkpoint.ckpt` |
+| PaintFlow | `paintflow.ckpt` |
+| RGB control | `rgbctrl.ckpt` |
+| Sketch control | `sketchctrl.ckpt` |
 
-Place the checkpoints in:
+Place all three checkpoints in the repository root:
 
 ```text
-models/
-  PaintFlow/1-checkpoint.ckpt
-  PaintCtrl/sparsectrl-rgb-checkpoint.ckpt
-  PaintCtrl/sparsectrl-sketch-checkpoint.ckpt
+PaintFlow/
+  paintflow.ckpt
+  rgbctrl.ckpt
+  sketchctrl.ckpt
 ```
 
 Update the checkpoint paths in the inference configuration and scripts. These checkpoints also require the base image model, tokenizer, text encoder, and VAE used by the inference pipeline.

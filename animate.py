@@ -120,7 +120,7 @@ def main(args):
         unet = unet.cuda(0)
 
         # Load motion modules
-        motion_module_paths = sorted(glob.glob(os.path.join(motion_modules_dir, "*.ckpt")))
+        motion_module_paths = sorted(glob.glob(os.path.join(motion_modules_dir, "paintflow.ckpt")))
         if not motion_module_paths:
             raise ValueError(f"No motion module checkpoints found in '{motion_modules_dir}'")
 
@@ -199,7 +199,7 @@ if __name__ == "__main__":
                         default="/workspace/AnimateDiff/PaintFlow/configs/prompts/1_animate/animate.yaml")
 
     parser.add_argument("--motion_modules_dir", type=str,
-                        default="/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints",
+                        default=".",
                         help="Path to the directory containing motion module checkpoints")
 
     # Add new arguments for custom UNet and VAE paths

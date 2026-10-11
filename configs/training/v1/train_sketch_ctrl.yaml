@@ -4,7 +4,7 @@ image_finetune: false
 output_dir: "/workspace/AnimateDiff/PaintFlow/outputs/sparsectrl_sketch"
 pretrained_model_path: "/workspace/AD-Evo-Tuner/models/StableDiffusion"
 controlnet_checkpoint_path: "models/SparseCtrl/v3_sd15_sparsectrl_scribble.ckpt"
-motion_module_path: "/workspace/AnimateDiff/PaintFlow/outputs/PaintEnh_stage128_prog5_progAttn_h6b1_lr2e6_bs3/checkpoints/1-checkpoint.ckpt"
+motion_module_path: "paintflow.ckpt"
 
 
 # SparseCtrl 特定配置

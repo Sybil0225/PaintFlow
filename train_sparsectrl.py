@@ -626,7 +626,7 @@ def main(
                 if step == len(train_dataloader) - 1:
                     torch.save(state_dict, os.path.join(save_path, f"sparsectrl-sketch-epoch-{epoch+1}.ckpt"))
                 else:
-                    torch.save(state_dict, os.path.join(save_path, f"sparsectrl-sketch-checkpoint.ckpt"))
+                    torch.save(state_dict, os.path.join(save_path, f"sketchctrl.ckpt"))
                 logging.info(f"Saved SparseCtrl state to {save_path} (global_step: {global_step})")
 
             # Periodically validation
