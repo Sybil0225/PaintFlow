@@ -4,7 +4,9 @@ PaintFlow generates painting-process videos. PaintCtrl adds RGB and sketch condi
 
 ## Model weights
 
-Model access is restricted and granted on request for non-commercial research only. Commercial use is not permitted.
+[Download model weights on Hugging Face](https://huggingface.co/Sybil025/CoPaint).
+
+Sign in to Hugging Face and request access. Requests are reviewed manually. The checkpoints are for non-commercial research only; commercial use is not permitted.
 
 | Model | Checkpoint |
 |---|---|
